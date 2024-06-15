@@ -19,7 +19,7 @@ abstract class File
     protected bool $opened = false;
     protected string $opened_mode = '';
     protected bool $locked = false;
-    protected int $lock_flags = 0;
+    protected $lock_flags = LOCK_UN;
     protected int $errno = 0;
     protected string $error_message = '';
 
@@ -43,7 +43,11 @@ abstract class File
         }
         return true;
     }
-    public function open(string $mode = 'c+', $perms = null): void
+
+    /**
+     * Open file. Reopen if file exists. Unlock if locked.
+     */
+    public function open(string $mode = 'c+', $perms = null): bool
     {
         $perms = $perms ?? $this->perms;
 
@@ -55,29 +59,165 @@ abstract class File
         $fd = fopen($this->fpath, $mode);
         if ($fd === false) {
             $this->opened = false;
+            $this->opened_mode = '';
             $this->add_error("File::open(): ");
+            $this->fd = $fd;
+            return false;
         } else {
+            $this->fd = $fd;
             $this->opened = true;
+            $this->opened_mode = $mode;
             $this->perms = $perms;
+            return true;
         }
     }
+
+    /**
+     * Close file. Unlock if locked.
+     */
     public function close(): void
     {
+        if ($this->locked)
+            $this->unlock();
+        if ($this->opened) {
+            if ($this->fd)
+                fclose($this->fd);
+        }
+        $this->opened = false;
+        $this->opened_mode = '';
+        $this->fd = false;
     }
+
+    public function read(int $start = 0, int $length = 0, $lock_flags = 0): mixed
+    {
+        $reopen = !$this->is_readable();
+        if ($reopen) {
+            $this->open('r');
+        }
+        if (($lock_flags & (LOCK_EX | LOCK_SH | LOCK_UN)) > 0) {
+            if ($this->locked)
+                $this->unlock();
+            $this->lock($lock_flags);
+        }
+    }
+
+    public function size(): int
+    {
+        if (!$this->create()) {
+            return 0;
+        }
+        return filesize($this->fpath);
+    }
+
+    /**
+     * Lock file
+     */
     public function lock(int $lock_flags): void
     {
+        if ($this->locked)
+            $this->unlock();
+        if (!$this->opened)
+            return;
+        $l = flock($this->fd, $lock_flags);
+        if (!$l) {
+            $this->add_error("Fle::lock()");
+            $this->locked = false;
+            $this->lock_flags = LOCK_UN;
+        } else {
+            $this->locked = true;
+            $this->lock_flags = $lock_flags;
+        }
     }
 
+    /**
+     * Unlock file
+     */
     public function unlock(): void
     {
+        if (!$this->locked && !$this->opened)
+            return;
+        $l = flock($this->fd, LOCK_UN);
+        if (!$l) {
+            $this->add_error("Fle::lock()");
+        } else {
+            $this->locked = false;
+            $this->lock_flags = LOCK_UN;
+        }
     }
 
+    /**
+     *  Acquire an exclusive lock (writer).
+     */
+    public function lock_ex(): void
+    {
+        if ($this->is_writable())
+            $this->lock(LOCK_EX);
+    }
+
+    /**
+     * Acquire a shared lock (reader).
+     */
+    public function lock_sh(): void
+    {
+        if ($this->is_readable())
+            $this->lock(LOCK_SH);
+    }
+
+    /**
+     * File is locked
+     */
+    public function is_locked(): bool
+    {
+        return $this->locked;
+    }
+
+    /**
+     * File opened for read
+     */
+    public function is_readable(): bool
+    {
+        return $this->opened && in_array($this->opened_mode, ['r', 'r+', 'w+', 'a+', 'x+', 'c+']);
+    }
+
+    /**
+     * File opened for write
+     */
+    public function is_writable(): bool
+    {
+        return $this->opened && $this->opened_mode != 'r';
+    }
+
+    /**
+     * File open for read/write
+     */
+    public function is_rw(): bool
+    {
+        return $this->is_readable() && $this->is_writable();
+    }
+
+    /**
+     * Get file permissions
+     */
     public function perms()
     {
         if (!$this->exists()) {
             return 0000;
         }
-        return fileperms($this->fpath);
+        $perms = fileperms($this->fpath);
+        if ($perms === false) {
+            return 0000;
+        } else {
+            return $perms;
+        }
+    }
+
+    /**
+     * Change file permissions
+     */
+    public function chmod(int $mode = 0600)
+    {
+        if (!chmod($this->fpath, $mode))
+            $this->add_error("File::chmod: ");
     }
 
     /* error methods */
