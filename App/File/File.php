@@ -1,4 +1,7 @@
 <?php
+
+use LDAP\Result;
+
 define('S_IRUSR', 00400); // Чтение для владельца.
 define('S_IWUSR', 00200); // Запись для владельца.
 define('S_IXUSR', 00100); // Исполнение для владельца.
@@ -10,7 +13,7 @@ define('S_IXGRP', 00010); // Исполнение для группы.
 define('S_IROTH', 00004); // Чтение для остальных.
 define('S_IWOTH', 00002); // Запись для остальных.
 define('S_IXOTH', 00001); // Исполнение для остальных.
-
+define('UNLOCK_FILE', 64);
 abstract class File
 {
     protected string $fpath;
@@ -88,19 +91,105 @@ abstract class File
         $this->fd = false;
     }
 
-    public function read(int $start = 0, int $length = 0, $lock_flags = 0): mixed
+    /**
+     * Read file content.
+     * If the lock flags are present, the file will be locked, the existing locks will be lifted.
+     * If the LOCK_UN flag is enabled, the lock will be lifted after execution.
+     */
+    public function read(int $start = 0, int $length = 0, $lock_flags = 0): string
     {
         $reopen = !$this->is_readable();
         if ($reopen) {
             $this->open('r');
         }
-        if (($lock_flags & (LOCK_EX | LOCK_SH | LOCK_UN)) > 0) {
+
+        if (($lock_flags & LOCK_SH) > 0) {
             if ($this->locked)
                 $this->unlock();
             $this->lock($lock_flags);
         }
+        $file_size = $this->size();
+
+        if ($start < 0)
+            $start = 0;
+        if ($start > $file_size)
+            $start = $file_size - 1;
+        if ($length < 0)
+            $length = 0;
+        if (($start + $length > $file_size) || $length == 0)
+            $length = $file_size - $start;
+
+        if ($start > 0 && $start < $file_size) {
+            if (fseek($this->fd, $start, SEEK_SET) == -1) {
+                $this->add_error("File::read()");
+            }
+        }
+        $result = fread($this->fd, $length);
+        if ($result === false) {
+            $this->add_error("File::read()");
+            return "";
+        }
+
+        // в php LOCK_UN = 3 это равно LOCK_SH | LOCK_EX. Просто заметка на всякий случай.
+        if ($lock_flags & LOCK_UN) {
+            $this->unlock();
+        }
+        if ($reopen) {
+            $this->close();
+        }
+        return $result;
+    }
+    /**
+     * Write content to file. Default mode 'w'
+     * If you need to use a different opening mode, use open
+     */
+    public function write(string $data, int $lock_flags = 0, int $start = 0, int $length = 0): void
+    {
+        $reopen = !$this->is_writable();
+        if ($reopen) {
+            $this->open('w');
+        }
+        if (($lock_flags & LOCK_EX) > 0) {
+            if ($this->locked)
+                $this->unlock();
+            $this->lock($lock_flags);
+        }
+
+        if (fseek($this->fd, $start, SEEK_SET) == -1) {
+            $this->add_error("File::read()");
+        }
+        if ($length == 0)
+            $length = strlen($data);
+        $result = fwrite($this->fd, $data, $length);
+        if ($result === false) {
+            $this->add_error("File::read()");
+        }
+        if ($lock_flags & LOCK_UN) {
+            $this->unlock();
+        }
+        if ($reopen) {
+            $this->close();
+        }
     }
 
+    /**
+     * Read file with shred lock
+     */
+    public function read_lock(int $start = 0, int $length = 0): string
+    {
+        return $this->read($start, $length, LOCK_SH | LOCK_UN);
+    }
+    /**
+     * Write file with exclusive lock
+     */
+    public function write_lock(int $start = 0, int $length = 0): string
+    {
+        return $this->read($start, $length, LOCK_EX | LOCK_UN);
+    }
+
+    /**
+     * Get file size. If file not exists trying to create it
+     */
     public function size(): int
     {
         if (!$this->create()) {
@@ -214,9 +303,15 @@ abstract class File
     /**
      * Change file permissions
      */
-    public function chmod(int $mode = 0600)
+    public function chmod($mode = 0600)
     {
-        if (!chmod($this->fpath, $mode))
+        $octalNumber = 0600;
+        if (is_string($mode) && preg_match('/^0[0-7]*$/', $mode)) {
+            $octalNumber = intval($mode, 8);
+        } else {
+            $octalNumber = $mode;
+        }
+        if (!chmod($this->fpath, $octalNumber))
             $this->add_error("File::chmod: ");
     }
 
