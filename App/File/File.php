@@ -13,7 +13,8 @@ define('S_IXGRP', 00010); // Исполнение для группы.
 define('S_IROTH', 00004); // Чтение для остальных.
 define('S_IWOTH', 00002); // Запись для остальных.
 define('S_IXOTH', 00001); // Исполнение для остальных.
-define('UNLOCK_FILE', 64);
+define('F_UNLOCK', 64);
+
 abstract class File
 {
     protected string $fpath;
@@ -106,7 +107,7 @@ abstract class File
         if (($lock_flags & LOCK_SH) > 0) {
             if ($this->locked)
                 $this->unlock();
-            $this->lock($lock_flags);
+            $this->lock($lock_flags & ~F_UNLOCK);
         }
         $file_size = $this->size();
 
@@ -114,8 +115,8 @@ abstract class File
             $start = 0;
         if ($start > $file_size)
             $start = $file_size - 1;
-        if ($length < 0)
-            $length = 0;
+        if ($length <= 0)
+            $length = $file_size;
         if (($start + $length > $file_size) || $length == 0)
             $length = $file_size - $start;
 
@@ -124,14 +125,18 @@ abstract class File
                 $this->add_error("File::read()");
             }
         }
-        $result = fread($this->fd, $length);
+        $result = "";
+        if ($file_size > 0) {
+            $result = fread($this->fd, $length);
+        }
+
         if ($result === false) {
             $this->add_error("File::read()");
-            return "";
+            $result = "";
         }
 
         // в php LOCK_UN = 3 это равно LOCK_SH | LOCK_EX. Просто заметка на всякий случай.
-        if ($lock_flags & LOCK_UN) {
+        if ($lock_flags & F_UNLOCK) {
             $this->unlock();
         }
         if ($reopen) {
@@ -177,7 +182,7 @@ abstract class File
      */
     public function read_lock(int $start = 0, int $length = 0): string
     {
-        return $this->read($start, $length, LOCK_SH | LOCK_UN);
+        return $this->read($start, $length, LOCK_SH | F_UNLOCK);
     }
     /**
      * Write file with exclusive lock
