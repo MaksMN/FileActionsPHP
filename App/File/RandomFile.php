@@ -1,5 +1,11 @@
 <?php
 
+namespace File;
+
+use File;
+
+if (!defined('DIRECT_ACCESS_KEY')) die('direct access');
+
 /**
  * Создает объект обработки уникального файла с рандомным именем.
  */
@@ -24,8 +30,7 @@ class RandomFile extends File
     ) {
         if (file_exists($dir)) {
             if (!is_dir($dir)) {
-                $error = error_get_last();
-                throw new Exception("ERROR: RandomFile::__construct(): directory is file " . $error['message'], 1);
+                throw new \Exception("ERROR: RandomFile::__construct(): directory is file ", 1);
             }
         } else {
             mkdir($dir);
@@ -34,11 +39,11 @@ class RandomFile extends File
         $lock_file = fopen($dir . '/' . $lock_file_name, 'c');
         if (!$lock_file) {
             $error = error_get_last();
-            throw new Exception("ERROR: RandomFile::__construct(): Could not get a file lock. " . $error['message'], 1);
+            throw new \Exception("ERROR: RandomFile::__construct(): Could not get a file lock. " . $error['message'], 1);
         }
         if (!flock($lock_file, LOCK_EX)) {
             $error = error_get_last();
-            throw new Exception("ERROR: RandomFile::__construct(): Could not get a file lock. " . $error['message'], 1);
+            throw new \Exception("ERROR: RandomFile::__construct(): Could not get a file lock. " . $error['message'], 1);
         }
         $ext = is_null($ext) ? "" : ".$ext";
         $file_path = $dir . "/" . $this->stampToDate($time_prefix_format) . $prefix . $this->randomString($random_len) . $ext;
@@ -48,7 +53,7 @@ class RandomFile extends File
         $file = fopen($file_path, 'c');
         if (!$file) {
             $error = error_get_last();
-            throw new Exception("ERROR: RandomFile::__construct(): Failed to create file $file_path. " . $error['message'], 1);
+            throw new \Exception("ERROR: RandomFile::__construct(): Failed to create file $file_path. " . $error['message'], 1);
         }
         fclose($file);
         fclose($lock_file);
