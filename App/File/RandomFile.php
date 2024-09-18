@@ -24,8 +24,8 @@ class RandomFile extends File
         string $mode = 'c+',
         string $ext = null,
         $perms = 0600,
-        string $time_prefix_format = 'd_m_Y__H_i_s__',
         string $prefix = '',
+        string $time_prefix_format = 'd_m_Y__H_i_s__',
         int $random_len = 10,
         string $lock_file_name = 'lock'
     ) {

@@ -12,9 +12,9 @@ try {
 }
 
 echo "x_write start\n";
-
-$file->writeLock("Locked");
+echo $file->path() . "\n";
+$file->writeLock("Random Locked");
 $file->lockEX();
-
-sleep(30);
+sleep(40);
+$file->delete();
 echo "x_write end\n";

@@ -34,6 +34,22 @@
                 "XDEBUG_MODE": "debug,develop",
                 "XDEBUG_CONFIG": "client_port=${port}"
             }
+        },
+        {
+            "name": "Test Random",
+            "type": "php",
+            "request": "launch",
+            "program": "${workspaceFolder}/x_random.php",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "port": 0,
+            "runtimeArgs": [
+                "-dxdebug.start_with_request=yes"
+            ],
+            "env": {
+                "XDEBUG_MODE": "debug,develop",
+                "XDEBUG_CONFIG": "client_port=${port}"
+            }
         }
     ]
 }
