@@ -24,10 +24,10 @@ class SimpleFile extends File
             throw new \Exception("ERROR: SimpleFile::__construct(): Could not open a file. " . $error['message'], 1);
         }
         $this->fd = $fd;
-        chmod($file_path, $perms);
         $this->fpath = $file_path;
         $this->mode = $mode;
         $this->perms = $perms;
         $this->opened = true;
+        $this->chmod($perms);
     }
 }

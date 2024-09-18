@@ -11,23 +11,47 @@ abstract class File
     protected $lock_flags = LOCK_UN;
     protected int $errno = 0;
     protected string $error_message = '';
+    protected bool $delete_on_close = false;
 
     public function exists(): bool
     {
         return file_exists($this->fpath) && is_file($this->fpath);
     }
 
-
     /**
      * Close file. Unlock if locked.
      */
     public function close(): void
     {
-
+        if (!$this->opened)
+            return;
         fclose($this->fd);
         $this->opened = false;
         $this->mode = '';
         $this->fd = false;
+        if ($this->delete_on_close)
+            unlink($this->fpath);
+    }
+
+    public function __destruct()
+    {
+        $this->close();
+    }
+
+    public function delete(): void
+    {
+        $this->deleteOnClose();
+        $this->close();
+    }
+
+    public function deleteOnClose(): void
+    {
+        $this->delete_on_close = true;
+    }
+
+    public function noDeleteOnClose(): void
+    {
+        $this->delete_on_close = false;
     }
 
     /**
@@ -50,7 +74,8 @@ abstract class File
 
         if ($start > 0 && $start < $file_size) {
             if (fseek($this->fd, $start, SEEK_SET) == -1) {
-                $this->addError("File::read()");
+                $error = error_get_last();
+                throw new \Exception("ERROR: File::read(): " . $error['message'], 1);
             }
         }
         $result = "";
@@ -59,8 +84,8 @@ abstract class File
         }
 
         if ($result === false) {
-            $this->addError("File::read()");
-            $result = "";
+            $error = error_get_last();
+            throw new \Exception("ERROR: File::read(): " . $error['message'], 1);
         }
 
         return $result;
@@ -77,12 +102,14 @@ abstract class File
             $start = 0;
 
         if (fseek($this->fd, $start, SEEK_SET) == -1) {
-            $this->addError("File::read()");
+            $error = error_get_last();
+            throw new \Exception("ERROR: File::write(): " . $error['message'], 1);
         }
         $length = strlen($data);
         $result = fwrite($this->fd, $data, $length);
         if ($result === false) {
-            $this->addError("File::read()");
+            $error = error_get_last();
+            throw new \Exception("ERROR: File::write(): " . $error['message'], 1);
         }
     }
 
@@ -125,9 +152,10 @@ abstract class File
             return;
         $l = flock($this->fd, $lock_flags);
         if (!$l) {
-            $this->addError("Fle::lock()");
             $this->locked = false;
             $this->lock_flags = LOCK_UN;
+            $error = error_get_last();
+            throw new \Exception("ERROR: File::lock(): " . $error['message'], 1);
         } else {
             $this->locked = true;
             $this->lock_flags = $lock_flags;
@@ -143,7 +171,8 @@ abstract class File
             return;
         $l = flock($this->fd, LOCK_UN);
         if (!$l) {
-            $this->addError("Fle::lock()");
+            $error = error_get_last();
+            throw new \Exception("ERROR: File::unlock(): " . $error['message'], 1);
         } else {
             $this->locked = false;
             $this->lock_flags = LOCK_UN;
@@ -227,32 +256,17 @@ abstract class File
         } else {
             $octalNumber = $mode;
         }
-        if (!chmod($this->fpath, $octalNumber))
-            $this->addError("File::chmod: ");
+        if (!chmod($this->fpath, $octalNumber)) {
+            $error = error_get_last();
+            throw new \Exception("ERROR: File::chmod(): " . $error['message'], 1);
+        }
     }
 
-    /* error methods */
-    public function errorNumber(): int
+    /**
+     * Get the value of fpath
+     */
+    public function path(): string
     {
-        return $this->errno;
-    }
-    public function errorMessage(): string
-    {
-        return $this->error_message;
-    }
-    public function errorClear(): void
-    {
-        $this->errno = 0;
-        $this->error_message = '';
-    }
-    protected function addError(string $prefix = ''): void
-    {
-        $error = error_get_last();
-        $this->error_message .= '[' . $error['type'] . '] ' . $error['message'] . "\n";
-        $this->errno = $error['type'];
-    }
-    public function isError(): bool
-    {
-        return $this->errno != 0;
+        return $this->fpath;
     }
 }
