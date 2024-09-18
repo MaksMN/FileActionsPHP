@@ -21,6 +21,7 @@ class RandomFile extends File
      */
     public function __construct(
         string $dir,
+        string $mode = 'c+',
         string $ext = null,
         $perms = 0600,
         string $time_prefix_format = 'd_m_Y__H_i_s__',
@@ -50,15 +51,19 @@ class RandomFile extends File
         while (file_exists($file_path)) {
             $file_path = $dir . "/" . $this->stampToDate($time_prefix_format) . $prefix . $this->randomString($random_len) . $ext;
         }
-        $file = fopen($file_path, 'c');
-        if (!$file) {
+        $fd = fopen($file_path, $mode);
+        if (!$fd) {
             $error = error_get_last();
             throw new \Exception("ERROR: RandomFile::__construct(): Failed to create file $file_path. " . $error['message'], 1);
         }
-        fclose($file);
         fclose($lock_file);
-        chmod($file_path, $perms);
+
+        $this->fd = $fd;
         $this->fpath = $file_path;
+        $this->mode = $mode;
+        $this->perms = $perms;
+        $this->opened = true;
+        $this->chmod($perms);
     }
 
     private function randomString(int $length = 1): string
