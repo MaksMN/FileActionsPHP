@@ -72,12 +72,11 @@ abstract class File
         if (($start + $length > $file_size) || $length == 0)
             $length = $file_size - $start;
 
-        if ($start > 0 && $start < $file_size) {
-            if (fseek($this->fd, $start, SEEK_SET) == -1) {
-                $error = error_get_last();
-                throw new \Exception("ERROR: File::read(): " . $error['message'], 1);
-            }
+        if (fseek($this->fd, $start, SEEK_SET) == -1) {
+            $error = error_get_last();
+            throw new \Exception("ERROR: File::read(): " . $error['message'], 1);
         }
+
         $result = "";
         if ($file_size > 0) {
             $result = fread($this->fd, $length);
@@ -113,6 +112,11 @@ abstract class File
         }
     }
 
+    public function truncate(int $size = 0): void
+    {
+        ftruncate($this->fd, $size);
+    }
+
     /**
      * Read file with shred lock
      */
@@ -138,6 +142,7 @@ abstract class File
      */
     public function size(): int
     {
+        clearstatcache();
         return filesize($this->fpath);
     }
 

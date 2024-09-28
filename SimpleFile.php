@@ -8,7 +8,7 @@ if (!defined('DIRECT_ACCESS_KEY')) die('direct access');
 
 class SimpleFile extends File
 {
-    public function __construct(string $file_path, string $mode = 'c+', $perms = 0600)
+    public function __construct(string $file_path, string $mode = 'c+', $perms = 0755)
     {
         $dir = dirname($file_path);
         if (file_exists($dir)) {
@@ -16,7 +16,10 @@ class SimpleFile extends File
                 throw new \Exception("ERROR: SimpleFile::__construct(): directory is file ", 1);
             }
         } else {
-            mkdir($dir);
+            if (!mkdir($dir, $perms, true)) {
+                $error = error_get_last();
+                throw new \Exception("ERROR: SimpleFile::__construct(): Could not create directory. " . $error['message'], 1);
+            }
         }
         $fd = fopen($file_path, $mode);
         if ($fd === false) {
