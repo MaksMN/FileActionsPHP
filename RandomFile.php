@@ -27,14 +27,18 @@ class RandomFile extends File
         string $prefix = '',
         string $time_prefix_format = 'd_m_Y__H_i_s__',
         int $random_len = 10,
-        string $lock_file_name = 'lock'
+        string $lock_file_name = 'lock',
+        $mkdir_perms = 0700
     ) {
         if (file_exists($dir)) {
             if (!is_dir($dir)) {
                 throw new \Exception("ERROR: RandomFile::__construct(): directory is file ", 1);
             }
         } else {
-            mkdir($dir);
+            if (!mkdir($dir, $mkdir_perms, true)) {
+                $error = error_get_last();
+                throw new \Exception("ERROR: SimpleFile::__construct(): Could not create directory. " . $error['message'], 1);
+            }
         }
 
         $lock_file = fopen($dir . '/' . $lock_file_name, 'c');
